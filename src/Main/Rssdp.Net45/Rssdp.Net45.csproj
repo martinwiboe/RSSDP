@@ -121,6 +121,9 @@
     <Compile Include="..\RSSDP.Portable\ServiceEventArgs.cs">
       <Link>ServiceEventArgs.cs</Link>
     </Compile>
+    <Compile Include="..\RSSDP.Portable\SimpleObservableCollection.cs">
+      <Link>SimpleObservableCollection.cs</Link>
+    </Compile>
     <Compile Include="..\RSSDP.Portable\SsdpCommunicationsServer.cs">
       <Link>SsdpCommunicationsServer.cs</Link>
     </Compile>
