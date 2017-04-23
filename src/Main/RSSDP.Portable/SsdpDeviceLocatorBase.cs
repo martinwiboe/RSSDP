@@ -156,52 +156,54 @@ ST: {4}
 			if (searchWaitTime.TotalSeconds > 0 && searchWaitTime.TotalSeconds <= 1) throw new ArgumentException("searchWaitTime must be zero (if you are not using the result and relying entirely in the events), or greater than one second.");
 
 			ThrowIfDisposed();
-
-			if (_SearchResults != null) throw new InvalidOperationException("Search already in progress. Only one search at a time is allowed.");
-			_SearchResults = new List<DiscoveredSsdpDevice>();
-
-			// If searchWaitTime == 0 then we are only going to report unexpired cached items, not actually do a search.
-			if (searchWaitTime > TimeSpan.Zero)
-				BroadcastDiscoverMessage(searchTarget, SearchTimeToMXValue(searchWaitTime));
-
-			lock (_SearchResultsSynchroniser)
-			{
-				foreach (var device in GetUnexpiredDevices().Where(NotificationTypeMatchesFilter))
-				{
-					if (this.IsDisposed) break;
-
-					DeviceFound(device, false);
-				}
-			}
-
-
-			if (searchWaitTime != TimeSpan.Zero && !this.IsDisposed)
-				await TaskEx.Delay(searchWaitTime).ConfigureAwait(false);
-
 			IEnumerable<DiscoveredSsdpDevice> retVal = null;
 
 			try
 			{
+				if (_SearchResults != null) throw new InvalidOperationException("Search already in progress. Only one search at a time is allowed.");
+				_SearchResults = new List<DiscoveredSsdpDevice>();
+
+				// If searchWaitTime == 0 then we are only going to report unexpired cached items, not actually do a search.
+				if (searchWaitTime > TimeSpan.Zero)
+					BroadcastDiscoverMessage(searchTarget, SearchTimeToMXValue(searchWaitTime));
+
 				lock (_SearchResultsSynchroniser)
 				{
-					retVal = _SearchResults;
-					_SearchResults = null;
+					foreach (var device in GetUnexpiredDevices().Where(NotificationTypeMatchesFilter))
+					{
+						if (this.IsDisposed) break;
+
+						DeviceFound(device, false);
+					}
 				}
 
-				var expireTask = RemoveExpiredDevicesFromCacheAsync();
-			}
-			finally
-			{
-				var server = _CommunicationsServer;
+				if (searchWaitTime != TimeSpan.Zero && !this.IsDisposed)
+					await TaskEx.Delay(searchWaitTime).ConfigureAwait(false);
+
 				try
 				{
+					lock (_SearchResultsSynchroniser)
+					{
+						retVal = _SearchResults;
+						_SearchResults = null;
+					}
+
+					var expireTask = RemoveExpiredDevicesFromCacheAsync();
+				}
+				finally
+				{
+					var server = _CommunicationsServer;
 					if (server != null) // In case we were disposed while searching.
 						server.StopListeningForResponses();
 				}
-				catch (ObjectDisposedException) { }
 			}
-
-			return retVal;
+			catch (ObjectDisposedException)
+			{
+				if (!this.IsDisposed) throw; // If we are disposed, ignore internal disposed exceptions as they're hardly surprising. Instead, just return the results we found.
+				//If we are not disposed, rethrow the exception because it indicates a problem.
+			}
+			
+			return retVal ?? new DiscoveredSsdpDevice[] { }; // Never return null, makes life easier for clients..
 		}
 
 		#endregion
